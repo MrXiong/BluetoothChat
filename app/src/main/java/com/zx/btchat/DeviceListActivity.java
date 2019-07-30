@@ -16,8 +16,10 @@
 
 package com.zx.btchat;
 
+import java.util.List;
 import java.util.Set;
 
+import android.Manifest;
 import android.app.Activity;
 import android.bluetooth.BluetoothAdapter;
 import android.bluetooth.BluetoothDevice;
@@ -26,6 +28,7 @@ import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
 import android.os.Bundle;
+import android.support.annotation.NonNull;
 import android.util.Log;
 import android.view.View;
 import android.view.Window;
@@ -37,13 +40,16 @@ import android.widget.ListView;
 import android.widget.TextView;
 import android.widget.AdapterView.OnItemClickListener;
 
+import pub.devrel.easypermissions.AppSettingsDialog;
+import pub.devrel.easypermissions.EasyPermissions;
+
 /**
  * This Activity appears as a dialog. It lists any paired devices and
  * devices detected in the area after discovery. When a device is chosen
  * by the user, the MAC address of the device is sent back to the parent
  * Activity in the result Intent.
  */
-public class DeviceListActivity extends Activity {
+public class DeviceListActivity extends Activity implements EasyPermissions.PermissionCallbacks {
     // Debugging
     private static final String TAG = "DeviceListActivity";
     private static final boolean D = true;
@@ -55,6 +61,9 @@ public class DeviceListActivity extends Activity {
     private BluetoothAdapter mBtAdapter;
     private ArrayAdapter<String> mPairedDevicesArrayAdapter;
     private ArrayAdapter<String> mNewDevicesArrayAdapter;
+
+    private static final int RC_CAMERA_AND_LOCATION = 1;
+    private Button mScanButton;
 
     @Override
     protected void onCreate(Bundle savedInstanceState) {
@@ -68,11 +77,17 @@ public class DeviceListActivity extends Activity {
         setResult(Activity.RESULT_CANCELED);
 
         // Initialize the button to perform device discovery
-        Button scanButton = (Button) findViewById(R.id.button_scan);
-        scanButton.setOnClickListener(new OnClickListener() {
+        mScanButton = (Button) findViewById(R.id.button_scan);
+        mScanButton.setOnClickListener(new OnClickListener() {
             public void onClick(View v) {
-                doDiscovery();
-                v.setVisibility(View.GONE);
+                String[] perms = {Manifest.permission.ACCESS_FINE_LOCATION};
+                if (EasyPermissions.hasPermissions(DeviceListActivity.this, perms)) {
+                    doDiscovery();
+                    mScanButton.setVisibility(View.GONE);
+                } else {
+                    EasyPermissions.requestPermissions(DeviceListActivity.this, getString(R.string.camera_and_location_rationale),
+                            RC_CAMERA_AND_LOCATION, perms);
+                }
             }
         });
 
@@ -199,4 +214,22 @@ public class DeviceListActivity extends Activity {
         }
     };
 
+    //定位权限动态申请6.0以上，不然无法找到其他蓝牙设备
+    @Override
+    public void onRequestPermissionsResult(int requestCode, @NonNull String[] permissions, @NonNull int[] grantResults) {
+        super.onRequestPermissionsResult(requestCode, permissions, grantResults);
+        EasyPermissions.onRequestPermissionsResult(requestCode, permissions, grantResults, this);
+    }
+    @Override
+    public void onPermissionsGranted(int requestCode, @NonNull List<String> perms) {
+        doDiscovery();
+        mScanButton.setVisibility(View.GONE);
+    }
+
+    @Override
+    public void onPermissionsDenied(int requestCode, @NonNull List<String> perms) {
+        if (EasyPermissions.somePermissionPermanentlyDenied(this, perms)) {
+            new AppSettingsDialog.Builder(this).build().show();
+        }
+    }
 }
